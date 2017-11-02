@@ -8,15 +8,15 @@
 usage() {
 echo "\
 Usage: $0 csvFile mapType
-mapType:	K for Kohonen
-        	C for CPG"
+mapType:	KSOM  for Kohonen self-organizing maps
+        	CPGNN for counterpropagation neural networks"
 }
 
 if [ "$#" -ne 2 ]
 then
 	usage
 else
-	if [ "$2" = "K" ]
+	if [ "$2" = "KSOM" ]
 	then
 		awk '
 		BEGIN {
@@ -27,7 +27,7 @@ else
 			print count "/" NR " instances ("count/NR*100"%) were correctly predicted"
 		}' $1
 	
-	elif [ "$2" = "C" ]
+	elif [ "$2" = "CPGNN" ]
 	then
 		awk '
 		BEGIN {
