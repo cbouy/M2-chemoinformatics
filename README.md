@@ -11,10 +11,12 @@ jatoonSuccessRate.sh is a Bash script designed to :
 
 ## :red_circle: webScraper
 
-webScraper is a Python script designed to collect data from several webpages and output them in a CSV format, with Data-Mining in mind. It is capable of multi-threading for faster data collection.  
- The present version is tailored to target [The Good Scents Company](http://www.thegoodscentscompany.com/) data, extracting the following properties : 'CAS Number','Name','SMILES','InChIKey','Molecular Weight','Odor Type','Odor Strength','Odor Description', and 'Taste Description', when available.  
- It is then up to the user to use data curation techniques to clean the data fetched from the website.  
- The following non-standard python libraries are needed for the script to function correctly:
+webScraper is a Python script designed to collect data from several webpages and output them in a CSV format, with Data-Mining in mind. It is capable of multi-threading for faster data collection.
+
+The present version is tailored to target [The Good Scents Company](http://www.thegoodscentscompany.com/) data, extracting the following properties : 'CAS Number','Name','SMILES','InChIKey','Molecular Weight','Odor Type','Odor Strength','Odor Description', and 'Taste Description', when available.  
+ It is then up to the user to use data curation techniques to clean the data fetched from the website.
+ 
+The following non-standard python libraries are needed for the script to function correctly:
 * lxml
 * requests
 * pandas
