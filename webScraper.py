@@ -34,13 +34,13 @@ outputFile 	= 'TheGoodScents.csv'
 # Functions
 ###########
 
-# Generates a progress bar on the terminal
-def GenerateProgessBar(array, string):
+def generateProgessBar(array, string):
+	'''Generates a progress bar on the terminal'''
 	widgets = [string ," - [", progressbar.ETA(format='Remaining:  %(eta)s'), "] ", progressbar.Bar(), " ", progressbar.Percentage()]
 	return progressbar.ProgressBar(widgets=widgets, max_value=len(array))
 
-# Retrieve each compound's <a> tag, returns 1 list of strings per webpage given
-def GetLinks(page):
+def getLinks(page):
+	'''Retrieves each compound's <a> tag, returns 1 list of strings per webpage given'''
 	# Parse the webpage as an HTML document, and save it in tree
 	scrapped = requests.get(page)
 	tree = html.fromstring(scrapped.content)
@@ -52,8 +52,8 @@ def GetLinks(page):
 	compound_links = tree.xpath(xpath)
 	return compound_links
 
-# Get the URL contained in each <a> tag
-def RegexSearch(item):
+def regexSearch(item):
+	'''Get the URL contained in each <a> tag'''
 	# Search in the attribute onclick for the regex. Ex of value of the attribute:
 	# openMainWindow('http://www.thegoodscentscompany.com/data/rw1247381.html');return false;
 	# [^\'" >]+ will match anything that is not a ' " space or > character
@@ -63,8 +63,8 @@ def RegexSearch(item):
 	else:
 		return None
 
-# Go to each URL and collect data
-def DataFetch(url):
+def dataFetch(url):
+	'''Go to each URL and collect data'''
 	scrapped = requests.get(url)
 	tree = html.fromstring(scrapped.content)
 	content = tree.xpath(xpath3)
@@ -82,7 +82,7 @@ def DataFetch(url):
 				if re.match(r'\d', content[2]):
 					# If only digits are found in the cell supposed to contained SMILES
 					d = {'Name': name, 'CAS Number': content[1], 'Molecular Weight': content[2]}
-					continue
+					break
 				else:
 					d[html_order[i]] = content[i]
 		except IndexError:
@@ -90,8 +90,9 @@ def DataFetch(url):
 			d[html_order[i]] = ''
 	return d
 
-# Execute with multi-threading, applying a function to each element of the array given, and calling the progress bas with a specific description
-def ExThreadSubmit(array, function, string):
+def exThreadSubmit(array, function, string):
+	'''Submit calculations to multiple threads.
+	Applies a function to each element of the array given, and calls the progress bar with a specific description.'''
 	# uses a pool of threads to execute calls asynchronously
 	with futures.ThreadPoolExecutor() as executor:
 		jobs = []
@@ -100,7 +101,7 @@ def ExThreadSubmit(array, function, string):
 		for item in array:
 			job = executor.submit(function, item)
 			jobs.append(job)
-		pbar = GenerateProgessBar(jobs, string)
+		pbar = generateProgessBar(jobs, string)
 		# Get results (with progress bar) as they are completed
 		for job in pbar(futures.as_completed(jobs)):
 			# If result is not None
@@ -113,17 +114,19 @@ def ExThreadSubmit(array, function, string):
 ########
 
 # Retrieve each compound's <a> tag, returns 1 list of tags per webpage given
-list_of_items_lists = ExThreadSubmit(pages, GetLinks, 'Scraping HTML pages')
+list_of_items_lists = exThreadSubmit(pages, getLinks, 'Scraping HTML pages')
 # Convert to a flat list
 aTag_list = list(chain.from_iterable(list_of_items_lists))
 print("Found",len(aTag_list), "compounds")
 # Get the URL contained in each <a> tag
-url_list = ExThreadSubmit(aTag_list, RegexSearch, 'Fetching URL')
+url_list = exThreadSubmit(aTag_list, regexSearch, 'Fetching URL')
 print("Fetched", len(url_list), "URL")
 # Go to each URL and collect data
-data = ExThreadSubmit(url_list, DataFetch, 'Collecting data')
-print("Collected data on", len(data), "compounds")
-# Create a dataframe with the data, and write to CSV file
+data = exThreadSubmit(url_list, dataFetch, 'Collecting data')
+# Create a dataframe with the data
 df = pd.DataFrame(data)
+print("Collected data on", len(df), "compounds")
+# Reorganize the columns
 df = df[csv_order]
+# Write dataframe to CSV file
 df.to_csv(outputFile, sep=';', index=False)
