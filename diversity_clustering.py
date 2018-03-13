@@ -5,40 +5,60 @@ Select a diverse subset of compounds from a library
 import sys, os, argparse
 import pandas as pd
 import numpy as np
+from concurrent import futures
 from rdkit import Chem, RDLogger, DataStructs
 from rdkit.Chem import PandasTools
 from rdkit.SimDivFilters import rdSimDivPickers
 
-# compute fingerprints
-def getFingerprints(ftype, radius, fps):
-    if ftype == 'MACCS':
-        return [Chem.rdMolDescriptors.GetMACCSKeysFingerprint(x) for x in fps]
-    elif ftype == 'circular':
-        return [Chem.rdMolDescriptors.GetMorganFingerprint(x, radius) for x in fps]
+def getMACCS_fps(mol):
+    return Chem.rdMolDescriptors.GetMACCSKeysFingerprint(mol)
 
-def pickSubset(algorithm, fps, size, link=None, seed=None):
-    if algorithm == 'MaxMin':
+def getCircular_fps(mol, radius):
+    return Chem.rdMolDescriptors.GetMorganFingerprint(mol, radius)
+
+# Compute fingerprints
+def getFingerprints(mols, args):
+    sys.stdout.write('Computing {} fingerprints\n'.format(args.fingerprint))
+    # uses a pool of processes to execute calls asynchronously
+    with futures.ProcessPoolExecutor(max_workers=args.cpu) as executor:
+        if args.fingerprint == 'MACCS':
+            fps = executor.map(getMACCS_fps, mols)
+        elif args.fingerprint == 'circular':
+            fps = executor.map(getCircular_fps, mols, args.radius)
+    fps = [fp for fp in fps]
+    return fps
+
+# Compute distance matrix as 1D array
+def computeDistanceMatrix(fps, args):
+    sys.stdout.write('Computing distance matrix\n')
+    distmatrix = []
+    # uses a pool of processes to execute calls asynchronously
+    with futures.ProcessPoolExecutor(max_workers=args.cpu) as executor:
+        # get results in order of submission using map
+        for distances in executor.map(getDistances, range(1,len(fps))):
+            distmatrix.extend(distances)
+    return np.array(distmatrix)
+
+# Pick a subset of molecules from a distance matrix
+def pickSubset(distmatrix, nfps, args):
+    sys.stdout.write('Picking a subset of molecules using {} clustering algorithm\n'.format(args.algorithm))
+    if args.algorithm == 'MaxMin':
         picker = rdSimDivPickers.MaxMinPicker()
-        return picker.LazyPick(distij, len(fps), size, seed=seed)
-    elif algorithm == 'hierarchical':
-        # compute distance matrix (lower triangle) as 1D array
-        dists = []
-        for i in range(1,len(fps)):
-            sims = DataStructs.BulkTanimotoSimilarity(fps[i],fps[:i])
-            dists.extend([1-x for x in sims])
-        dists=np.array(dists)
-        if link == 'single':
+        return picker.Pick(distmatrix, nfps, args.size, seed=args.seed)
+    elif args.algorithm == 'hierarchical':
+        if args.link == 'single':
             linkage = rdSimDivPickers.SLINK
-        elif link == 'complete':
+        elif args.link == 'complete':
             linkage = rdSimDivPickers.CLINK
-        elif link == 'centroid':
+        elif args.link == 'centroid':
             linkage = rdSimDivPickers.CENTROID
-        elif link == 'average':
+        elif args.link == 'average':
             linkage = rdSimDivPickers.UPGMA
-        elif link == 'ward':
+        elif args.link == 'ward':
             linkage = rdSimDivPickers.WARD
         picker = rdSimDivPickers.HierarchicalClusterPicker(linkage)
-        return picker.Pick(dists, len(fps), size)
+        return picker.Pick(distmatrix, nfps, args.size)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -67,12 +87,16 @@ if __name__ == '__main__':
     help='Radius for Morgan circular fingerprints', default=None)
     parser.add_argument("--seed", metavar='number', type=int, required=False,
     help='Random seed (only used for the MaxMin algorithm)', default=-1)
+    parser.add_argument("--cpu", metavar='number', type=int, required=False,
+    help='Number of CPU cores to use', default=None)
     # Parse arguments from command line
     args = parser.parse_args()
-    extension = os.path.splitext(args.input)[1]
+    extension_input = os.path.splitext(args.input)[1]
+    extension_output = os.path.splitext(args.output)[1]
 
     # read input file
-    if extension == '.xlsx':
+    sys.stdout.write('Reading input file {}\n'.format(args.input))
+    if extension_input in ['.xlsx', '.xls']:
         db = pd.read_excel(args.input, header=None if args.no_header else 0)
     else:
         db = pd.read_csv(args.input, header=None if args.no_header else 0)
@@ -85,18 +109,21 @@ if __name__ == '__main__':
     lg.setLevel(RDLogger.ERROR)
 
     # compute fingerprints
-    fps = getFingerprints(args.fingerprint, args.radius, db['RDmol'])
+    fps = getFingerprints(db['RDmol'], args)
+    nfps = len(fps)
+    db.drop(columns=['RDmol'], inplace=True)
 
-    # define distance
-    def distij(i,j, fps=fps):
-        return 1-DataStructs.TanimotoSimilarity(fps[i],fps[j])
+    # Compute Soergel distances for a given compound
+    def getDistances(i):
+        return [1-x for x in DataStructs.BulkTanimotoSimilarity(fps[i],fps[:i])]
+
+    # compute distance matrix
+    distmatrix = computeDistanceMatrix(fps, args)
 
     # pick N molecules
-    pickIndices = pickSubset(args.algorithm, fps, size=args.size, link=args.link, seed=args.seed)
+    pickIndices = pickSubset(distmatrix, nfps, args)
 
-    if extension == '.xlsx':
-        db.iloc[pickIndices].to_excel(args.output, engine='openpyxl',
-        columns=db.columns.drop('RDmol'), index=False)
+    if extension_output in ['.xlsx', '.xls']:
+        db.iloc[pickIndices].to_excel(args.output, engine='openpyxl', index=False)
     else:
-        db.iloc[pickIndices].to_csv(args.output,
-        columns=db.columns.drop('RDmol'), index=False)
+        db.iloc[pickIndices].to_csv(args.output, index=False)
