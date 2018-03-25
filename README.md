@@ -1,6 +1,15 @@
 # chemoinformaticsTools
 Scripts to analyse chemoinformatics software's output, collect data from the web...etc.
 
+## :red_circle: diversity_clustering
+
+A Python script to select a diverse subset of compounds from a library (.CSV or .xlsx file). It is based on MACCS keys fingerprints or Morgan circular fingerprints, and uses a MaxMin or hierachical clustering algorithm to select the most diverse compounds.
+
+The following non-standard python libraries are needed for the script to function correctly:
+* pandas
+* numpy
+* rdkit
+
 ## :red_circle: jatoonSuccessRate
 
 [JATOON](http://joao.airesdesousa.com/jatoon/) (Java Tools for Neural Networks) was started in 2001 as a system of Java applets for training and applying neural networks.
