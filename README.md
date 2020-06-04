@@ -1,5 +1,6 @@
-# chemoinformaticsTools
-Scripts to analyse chemoinformatics software's output, collect data from the web...etc.
+# M2-chemoinformatics
+
+Scripts that I wrote during my Chemoinformatics master in Strasbourg
 
 ## :red_circle: diversity_clustering
 
